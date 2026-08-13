@@ -1179,6 +1179,12 @@ Always remove material that could directly grant access:
 
 No access-bearing credential was found in the collected `skywalkctl` output.
 
+## License
+
+This project is available under the permissive [MIT License](LICENSE). Anyone
+may use, copy, modify, publish, distribute, sublicense, or sell copies, provided
+the copyright and license notice are retained.
+
 ## Additional documentation
 
 - [Complete option reference and research notes](REFERENCE.md)
