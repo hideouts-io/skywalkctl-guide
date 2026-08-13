@@ -1,0 +1,650 @@
+.Dd August 12, 2026
+.Dt SKYWALKCTL 8
+.Os
+.Sh NAME
+.Nm skywalkctl
+.Nd inspect and debug the macOS Skywalk networking subsystem
+.Sh SYNOPSIS
+.Nm
+.Ar command
+.Op Ar arguments
+.Sh DESCRIPTION
+.Nm
+is an Apple diagnostic utility for the Skywalk networking subsystem.
+Skywalk supplies plumbing between networking software, kernel datapaths,
+and supported hardware.
+The utility exposes providers, nexus instances, channels, flows,
+interfaces, allocator state, namespace reservations, and protocol counters.
+.Pp
+This manual expands the brief manual and built-in usage text shipped with
+the tested Apple-signed binary.
+It is based on macOS 26.4 build 25E246.
+The installed binary and its own help remain authoritative because
+.Nm
+is an unstable debugging interface, not a documented public API.
+.Pp
+Most commands are observational, but
+.Cm enable ,
+some forms of
+.Cm log ,
+.Cm traffic-rule ,
+and every functional form of
+.Cm redirect
+change live or persistent state.
+Those commands are clearly marked below.
+.Sh PRIVILEGES
+Some output is available to an ordinary user, but complete kernel statistics
+commonly require root.
+An empty result accompanied by
+.Dq Operation not permitted
+is a privilege coverage gap, not proof that the requested object does not exist.
+.Sh OBJECT MODEL
+.Bl -tag -width flow-switch
+.It Sy provider
+A definition for a Skywalk service, such as a network interface,
+flow switch, user pipe, or kernel pipe.
+.It Sy nexus
+A runtime instance created from a provider.
+.It Sy channel
+An endpoint attached to a nexus port.
+Output may associate a channel with a process and file descriptor.
+.It Sy flow
+A Skywalk network-flow record.
+A row can outlive the corresponding application socket and is not necessarily
+a currently established connection.
+.It Sy flow-switch
+The Skywalk component that classifies and moves packets for an interface.
+.It Sy netif
+Skywalk's representation of a network interface.
+.El
+.Sh COMMANDS
+.Ss channel
+.Bd -literal -offset indent
+skywalkctl channel [-h] [-C command] [-w seconds]
+.Ed
+.Pp
+Displays channel instances, nexus UUIDs, port numbers, process/PID attribution,
+file descriptors, and channel flags.
+.Bl -tag -width Ds
+.It Fl h , Fl -help
+Print usage.
+.It Fl C , Fl -command Ns = Ns Ar command
+Show channels attributed to the named command.
+.It Fl w , Fl -wait Ns = Ns Ar seconds
+Repeat at the requested interval until interrupted.
+This is an unbounded mode; callers should impose their own timeout.
+.El
+.Pp
+In the tested snapshot, the unfiltered command reported 31 instances.
+Filtering for
+.Pa kernel_task
+returned kernel-owned ports.
+The output flag
+.Dv DEFUNCT_OK
+is a channel capability/state flag and is not evidence of malicious activity.
+.Ss flow
+.Bd -literal -offset indent
+skywalkctl flow [-h] [-C command] [-I interface] [-n] [-J]
+                [-p protocol] [-P pid] [-w seconds]
+.Ed
+.Pp
+Displays flow records and accounting.
+.Bl -tag -width Ds
+.It Fl C , Fl -command Ns = Ns Ar command
+Filter by effective command name.
+.It Fl I , Fl -interface Ns = Ns Ar interface
+Filter by interface name.
+.It Fl n , Fl -numeric
+Do not resolve addresses or service names.
+.It Fl J , Fl -json
+Emit JSON.
+.It Fl p , Fl -protocol Ns = Ns Ar protocol
+Filter by protocol, such as
+.Cm tcp .
+.It Fl P , Fl -pid Ns = Ns Ar pid
+Filter by PID.
+.It Fl w , Fl -wait Ns = Ns Ar seconds
+Repeat until interrupted.
+.El
+.Pp
+The table contains protocol, local and remote endpoint, inbound and outbound
+byte counters, packet counters, service class, interface, nexus port,
+flow-advisory index, compact flags, tracking states, RTT values, and process
+attribution.
+The secondary packet counters labeled
+.Dq SPkts
+are not defined by the installed manual and should be retained without guessing
+at their precise implementation meaning.
+.Pp
+The flag legend printed by the tested binary is:
+.Bl -tag -compact -width Ds
+.It Cm t
+tracked
+.It Cm c
+connected
+.It Cm l
+listener
+.It Cm q
+QoS marking
+.It Cm w
+wait-close
+.It Cm e
+close notification
+.It Cm A
+aborted
+.It Cm N
+nonviable
+.It Cm W
+withdrawn
+.It Cm T
+torn down
+.It Cm D
+destroyed
+.It Cm R
+lingering
+.It Cm L
+low latency
+.It Cm P
+parent
+.It Cm C
+child
+.It Cm S
+do not wake from sleep
+.El
+.Pp
+On the tested build,
+.Fl J
+produced syntactically valid JSON but repeated the
+.Dq localTrackState
+key twice per object and omitted
+.Dq remoteTrackState .
+Consumers must account for duplicate-key ambiguity.
+.Ss flow-adv
+.Bd -literal -offset indent
+skywalkctl flow-adv [-h] [-C command] [-I interface] [-P pid]
+.Ed
+.Pp
+Displays flow-advisory records.
+The three filters select command, interface, and PID respectively.
+All tested forms completed successfully with no records.
+That means no advisory record was returned at those instants; it is not a
+historical guarantee.
+.Ss flow-owner
+.Bd -literal -offset indent
+skywalkctl flow-owner [-h] [-C command] [-I interface] [-P pid]
+.Ed
+.Pp
+Maps flow-owner properties to interface, nexus port, property, bucket, and
+process.
+In the tested snapshot, the unfiltered view contained kernel ownership rows for
+the primary Wi-Fi and one tunnel interface.
+.Ss flow-route
+.Bd -literal -offset indent
+skywalkctl flow-route [-h] [-n]
+.Ed
+.Pp
+Displays Skywalk flow-route entries.
+.Fl n
+disables name and service resolution.
+Both tested forms completed successfully with no entries.
+.Ss flow-switch
+.Bd -literal -offset indent
+skywalkctl flow-switch [-h] [-G] [-I interface] [-U uuid] [-v]
+.Ed
+.Pp
+Displays flow-switch counters.
+.Bl -tag -width Ds
+.It Fl G , Fl -global
+Fold counters across instances.
+.It Fl I , Fl -interface Ns = Ns Ar interface
+Select one interface.
+.It Fl U , Fl -uuid Ns = Ns Ar uuid
+Select one nexus UUID.
+.It Fl v , Fl -verbose
+Include detailed counters.
+.El
+.Pp
+Counters cover receive/transmit processing, classification, aggregation,
+copies, queue/ring conditions, fragmentation, allocation failures, and drops.
+They are generally cumulative for the lifetime of the object or boot.
+A counter whose label contains
+.Dq dropped
+does not by itself establish user-visible packet loss or compromise.
+Capture two snapshots over a known interval and interpret the reason-specific
+counter with neighboring counters and traffic volume.
+.Ss interface
+.Bd -literal -offset indent
+skywalkctl interface [-h] [-G] [-I interface] [-L] [-Q] [-W seconds]
+.Ed
+.Pp
+Displays Skywalk netif counters.
+.Bl -tag -width Ds
+.It Fl G , Fl -global
+Fold statistics globally.
+.It Fl I , Fl -interface Ns = Ns Ar interface
+Select an interface.
+.It Fl L , Fl -llink
+Display logical-link and queue-set topology.
+.It Fl Q , Fl -queue
+Display netif queue rates, totals, service classes, and queue parameters.
+.It Fl W , Fl -wait Ns = Ns Ar seconds
+Repeat until interrupted.
+.El
+.Pp
+Queue service-class abbreviations include BE (best effort), BK (background),
+VI (video), and VO (voice).
+Zero instantaneous queue rates only describe the sampling instant.
+.Ss memory
+.Bd -literal -offset indent
+skywalkctl memory [-h] [-I interface] [-J] [-P pid]
+                  [-a] [-A] [-R] [-C] [-g]
+.Ed
+.Pp
+Displays Skywalk allocator information.
+.Bl -tag -width Ds
+.It Fl I , Fl -interface Ns = Ns Ar interface
+Filter by interface.
+.It Fl J , Fl -json
+Emit JSON.
+.It Fl P , Fl -pid Ns = Ns Ar pid
+Filter by PID.
+.It Fl a , Fl -all
+Show arenas, regions, and caches.
+.It Fl A , Fl -arena
+Show arenas.
+.It Fl R , Fl -region
+Show regions.
+.It Fl C , Fl -cache
+Show caches.
+.It Fl g , Fl -group
+Group memory by process.
+.El
+.Pp
+Arenas associate clients with region types; regions describe segment/object
+geometry and memory totals; caches describe slabs, magazines, allocations,
+frees, failures, utilization, and backing regions.
+These are kernel allocator statistics, not application heap measurements.
+A full cache or nonzero cumulative failure counter is not automatically a leak.
+.Ss netns
+.Bd -literal -offset indent
+skywalkctl netns -a
+skywalkctl netns -i ip-address -p protocol
+.Ed
+.Pp
+Displays TCP or UDP port reservations by network namespace.
+.Bl -tag -width Ds
+.It Fl a , Fl -all
+Show all namespaces.
+This is a complete primary mode.
+.It Fl i , Fl -ip Ns = Ns Ar address
+Select an IPv4 or IPv6 namespace address.
+.It Fl p , Fl -protocol Ns = Ns Ar protocol
+Select
+.Cm tcp
+or
+.Cm udp .
+.El
+.Pp
+Unless
+.Fl a
+is present, both
+.Fl i
+and
+.Fl p
+are required.
+When
+.Fl a
+is present, additional namespace specifiers are ignored and the tool prints a
+warning.
+A valid address/protocol pair with no matching namespace may exit 2 silently.
+Malformed or incomplete input exits 22 with an explanatory message.
+.Pp
+Columns report the port, Skywalk reservation count, BSD reservation count,
+and listener count.
+A reservation is not necessarily a listening user process; correlate with
+.Xr lsof 8
+or system
+.Xr netstat 1 .
+.Ss protons
+.Bd -literal -offset indent
+skywalkctl protons
+.Ed
+.Pp
+Displays protocol-number reference counts and PID/effective-PID fields.
+The numeric protocol field corresponds to the IP protocol/IPv6 next-header
+number space; consult the IANA protocol-number registry for names.
+.Pp
+Although the tested binary advertised
+.Fl a ,
+.Fl i ,
+and
+.Fl p ,
+it rejected all three as invalid options.
+Only the no-option form was usable on the tested build.
+.Ss netstat
+.Bd -literal -offset indent
+skywalkctl netstat -a [-C command | -I interface | -P pid | -U uuid]
+                    [-p protocol] [-n] [-v]
+skywalkctl netstat -s [-C command | -I interface | -P pid | -U uuid]
+                    [-p protocol] [-G] [-o] [-v] [-z] [-n]
+skywalkctl netstat -a -s [modifiers]
+.Ed
+.Pp
+This is the Skywalk subcommand, not the separate system
+.Xr netstat 1
+program.
+It requires a primary mode:
+.Bl -tag -width Ds
+.It Fl a , Fl -all
+Select the flow view.
+.It Fl s , Fl -statistics
+Select per-protocol statistics.
+.El
+.Pp
+Filters and modifiers are:
+.Bl -tag -width Ds
+.It Fl C , Fl -command Ns = Ns Ar command
+Filter by command.
+.It Fl G , Fl -global
+Fold statistics globally.
+.It Fl I , Fl -interface Ns = Ns Ar interface
+Filter by interface.
+.It Fl n , Fl -numeric
+Disable address and service-name resolution.
+.It Fl o , Fl -aop
+Include AOP statistics in statistics mode.
+.It Fl P , Fl -pid Ns = Ns Ar pid
+Filter by PID.
+.It Fl p , Fl -protocol Ns = Ns Ar protocol
+Filter by protocol.
+.It Fl U , Fl -uuid Ns = Ns Ar uuid
+Filter by nexus UUID.
+.It Fl v , Fl -verbose
+Expand output.
+.It Fl z , Fl -zero
+Include zero-valued statistics.
+.El
+.Pp
+Filters or modifiers without
+.Fl a
+or
+.Fl s
+exit 64 and print usage.
+.Fl a Fl s
+produces both flow and statistics views.
+In statistics mode,
+.Fl G
+cannot be combined with interface, PID, command, or UUID filters.
+On the tested build, nonnumeric
+.Fl a
+could spend substantial time resolving names; use
+.Fl a Fl n
+for reproducible evidence.
+.Ss provider
+.Bd -literal -offset indent
+skywalkctl provider [-h] [-D]
+.Ed
+.Pp
+Lists nexus providers and child instances.
+.Fl D
+adds transmit/receive ring counts, slots, buffer and metadata sizes, memory-hint
+counts, and instance UUIDs.
+Provider types observed on the tested system were net-if, flow-switch,
+user-pipe, and kernel-pipe.
+.Ss show
+.Bd -literal -offset indent
+skywalkctl show [-h] [-v]
+.Ed
+.Pp
+Prints a concise runtime overview.
+.Fl v
+adds attached process/port information for applicable channels.
+It is a useful first inventory, but
+.Cm tree
+and
+.Cm provider
+provide more structure.
+.Ss tree
+.Bd -literal -offset indent
+skywalkctl tree [-h] [-U uuid]
+.Ed
+.Pp
+Emits the provider, nexus, and channel hierarchy as JSON.
+.Fl U
+starts at the specified object UUID.
+Validate saved output with
+.Dl jq -e . tree.json
+before parsing it.
+.Ss log
+.Bd -literal -offset indent
+skywalkctl log show
+skywalkctl log list
+skywalkctl log SK_VERB_name
+skywalkctl log 0
+.Ed
+.Bl -tag -width Ds
+.It Cm show
+Read-only.
+Show currently selected verbose flags.
+.It Cm list
+Read-only.
+List every known verbose flag and numeric bit value.
+.It Ar SK_VERB_name
+.Em State-changing .
+Set the kernel Skywalk verbosity mask represented by the flag expression.
+.It Cm 0
+.Em State-changing .
+Reset the kernel Skywalk verbosity mask.
+.El
+.Pp
+Changing verbosity can substantially increase kernel logging.
+The state-changing forms were not executed during this research.
+.Ss status
+.Bd -literal -offset indent
+skywalkctl status
+.Ed
+.Pp
+Checks a legacy Skywalk enable/boot setting.
+On the tested build it queried a sysctl that did not exist, printed
+.Dq Skywalk is NOT enabled currently,
+and exited 71 even though every runtime inventory command returned populated
+Skywalk objects.
+Do not use this command alone as a runtime-presence test.
+.Ss enable
+.Bd -literal -offset indent
+skywalkctl enable 1
+skywalkctl enable 0
+.Ed
+.Pp
+.Em State-changing and root-only .
+Edits NVRAM boot arguments to enable (1) or disable (0) Skywalk and may require
+a reboot.
+The installed binary says the change may take effect after reboot.
+Neither form was executed during this research.
+.Ss tcpinfo
+.Bd -literal -offset indent
+skywalkctl tcpinfo local-ip local-port remote-ip remote-port
+.Ed
+.Pp
+Queries one exact TCP four-tuple.
+Output fields are interface index, sequence number, acknowledgement number,
+receive window, and window scale.
+The tuple must still be present when queried; otherwise the command reports
+.Dq flow not found .
+.Ss flowidns
+.Bd -literal -offset indent
+skywalkctl flowidns [-v] [-d domain] [-f hex-flow-id]
+.Ed
+.Pp
+Displays flow-ID namespace allocation statistics and mappings.
+.Bl -tag -width Ds
+.It Fl v , Fl -verbose
+Show records as well as aggregate statistics.
+.It Fl d , Fl -domain Ns = Ns Ar domain
+Select PF, IPSec, flowswitch, or inpcb.
+.It Fl f , Fl -flowID Ns = Ns Ar hex-id
+Select one hexadecimal flow ID.
+.El
+.Pp
+Aggregate fields are allocations, releases, collisions, and current flow-ID
+count.
+Record fields include flow ID, endpoint pair, IP protocol number, ports, and
+domain.
+A flow ID is an internal identifier, not an external identity.
+.Ss traffic-rule
+.Bd -literal -offset indent
+skywalkctl traffic-rule show
+skywalkctl traffic-rule add -t inet -p protocol [-l local-address]
+        [-r remote-address] [-L local-port] [-R remote-port]
+        -q queue-set [-i interface]
+skywalkctl traffic-rule add -t eth [-e ether-type] [-m remote-mac]
+        -q queue-set [-i interface]
+skywalkctl traffic-rule remove -u rule-uuid
+.Ed
+.Bl -tag -width Ds
+.It Cm show
+Read-only.
+List installed traffic-steering rules.
+.It Cm add
+.Em State-changing .
+Add an inet or Ethernet steering rule.
+Inet rules accept TCP/UDP protocol, local/remote addresses, and local/remote
+ports.
+Ethernet rules accept EAP/WAI ether type and remote MAC address.
+All rules require a queue-set ID and may name an interface.
+.It Cm remove
+.Em State-changing .
+Remove the rule identified by UUID.
+.El
+.Pp
+The tested
+.Cm show
+returned no rules.
+The add/remove forms were inspected through usage validation only and were not
+executed.
+.Ss redirect
+.Bd -literal -offset indent
+skywalkctl redirect create -t {ethernet|cellular} [-d delegate] interface
+skywalkctl redirect set -d {delegate|none} interface
+skywalkctl redirect destroy interface
+.Ed
+.Pp
+Every functional redirect subcommand is
+.Em state-changing .
+.Bl -tag -width Ds
+.It Cm create
+Create a redirect interface of Ethernet or cellular type, optionally with a
+delegate interface.
+.It Cm set
+Change or clear the delegate of an existing redirect interface.
+.It Cm destroy
+Destroy the named redirect interface.
+.El
+.Pp
+No functional redirect form was intentionally executed.
+Notably,
+.Dl skywalkctl redirect destroy -h
+does not request help on the tested build: it treats
+.Dq -h
+as an interface name and attempts a destroy operation.
+Do not use that form for discovery.
+.Ss aop
+.Bd -literal -offset indent
+skywalkctl aop [-h] [-b]
+.Ed
+.Pp
+Displays AOP networking or driver statistics.
+.Fl b
+requests activity bitmaps.
+Support is hardware and build dependent.
+The tested default form reported
+.Dq Operation not supported,
+and the bitmap form returned no records.
+.Ss print-banner
+.Bd -literal -offset indent
+skywalkctl print-banner [-h]
+.Ed
+.Pp
+An undocumented/internal banner path.
+It returned no output on the tested build.
+.Ss channel-stats
+Compatibility alias for
+.Cm channel .
+It accepted the same command and wait filters and produced identical output in
+the tested snapshot.
+.Ss list-providers
+Compatibility alias for
+.Cm provider .
+It accepted
+.Fl D
+and produced identical detailed output in the tested snapshot.
+.Sh OUTPUT INTERPRETATION
+.Bl -tag -width Ds
+.It Empty successful result
+Exit 0 with empty standard output and standard error means the command returned
+no record at that instant.
+.It Permission error
+.Dq Operation not permitted
+means the requested kernel surface was not fully accessible.
+.It Unsupported surface
+.Dq Operation not supported
+means the hardware or OS build did not expose that data surface.
+.It Missing sysctl
+.Dq No such file or directory
+for a sysctl can indicate that the installed utility and running kernel no
+longer agree on that legacy key.
+.It Exit 2 from netns
+A syntactically valid address/protocol pair did not produce a namespace record
+on the tested build.
+.It Exit 22
+Invalid or incomplete
+.Cm netns
+arguments.
+.It Exit 64 or 255
+Usage/argument parser result, not a network finding.
+.It Exit 137
+An external collector intentionally ended an unbounded wait mode with SIGKILL;
+this is not a native
+.Nm
+diagnostic status.
+.El
+.Sh PRIVACY
+Raw output can fingerprint a host and reveal current network relationships.
+Before publication, redact credentials and access-bearing material, plus real
+host/user names, IP addresses, ports when identifying, PIDs, runtime UUIDs,
+precise timestamps, and application inventory.
+Preserve field names, counts, exit statuses, command behavior, and technical
+interpretation.
+.Sh FILES
+.Bl -tag -width /usr/sbin/skywalkctl
+.It Pa /usr/sbin/skywalkctl
+Installed utility.
+.It Pa /usr/share/man/man8/skywalkctl.8
+Apple's installed brief manual page.
+.El
+.Sh EXIT STATUS
+.Nm
+uses command-specific exit statuses.
+Observed values include 0 for success, 2 for a valid but unmatched
+.Cm netns
+selection, 22 for invalid
+.Cm netns
+arguments, 64 for usage errors, 71 for the stale
+.Cm status
+sysctl path, and 255 for some top-level subcommand validation failures.
+.Sh SEE ALSO
+.Xr netstat 1 ,
+.Xr lsof 8 ,
+.Xr sysctl 8
+.Sh AUTHORS
+.An "Skywalkctl guide contributors"
+.Pp
+This expanded observational manual was derived from the installed manual,
+built-in usage text, an Apple-signed macOS 26.4 binary, elevated read-only
+experiments, and Apple's open-source XNU syscall surface.
+.Sh CAVEATS
+.Nm
+is a debug interface with inconsistent help handling and build-dependent
+schemas.
+Do not infer compromise from an unfamiliar provider, tunnel, channel flag,
+empty table, or cumulative counter without independent corroboration.
