@@ -6,6 +6,22 @@ This is a hands-on guide built from 175 recorded, elevated, read-only invocation
 
 > `skywalkctl` is a debugging interface, not a stable public API. Commands and output can change between macOS releases. Always check the help emitted by the binary installed on your Mac.
 
+## [Open the Complete `skywalkctl` Command Reference →](REFERENCE.md)
+
+The main README is a guided walkthrough for learning how Skywalk objects fit
+together and how to interpret representative output. Use
+[`REFERENCE.md`](REFERENCE.md) as the exhaustive lookup document when you need:
+
+- every discovered top-level command, option, alias, and subcommand;
+- tested command variations and verified parser requirements;
+- observed stdout, stderr, and exit-status behavior;
+- build-specific limitations, compatibility paths, and unexpected results;
+- safe versus state-changing command classifications; and
+- detailed research findings that would interrupt the flow of this tutorial.
+
+In short: **read this README to learn `skywalkctl`; open the command reference
+when you need to look up exact behavior.**
+
 ## What is included
 
 - A guided tour of every top-level command.
