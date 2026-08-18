@@ -95,6 +95,45 @@ network flow
 - A **flow switch** classifies and moves packets for an interface.
 - A **netif** is Skywalk’s representation of a network interface.
 
+## External research context
+
+Jonathan Levin's Darwin networking research describes Skywalk as an undocumented
+XNU networking subsystem whose public-source coverage is intentionally limited.
+The same research identifies `utun`, IPSec, and bridge-related paths as useful
+places to correlate Skywalk objects with visible macOS networking behavior. It
+also explains why `tree`, `provider`, and `channel` are important: Skywalk
+exports provider and channel data through private sysctl interfaces, and
+`skywalkctl` is one of the Apple-signed tools able to decode that data into a
+human-readable form.
+
+That research also gives useful constraints for this guide:
+
+- Nexus providers commonly fall into user pipes, kernel pipes, network
+  interfaces, and flow switches.
+- A VPN or tunnel can appear as both a netif provider and a multi-stack flow
+  switch, so seeing `utun` in Skywalk output is expected on many systems.
+- Nexus registration and broad observation are entitlement-gated operations.
+  This is one reason third-party tools should treat Skywalk as an observed
+  subsystem, not as a supported extension point.
+- Channel details can be associated with file descriptors, UUIDs, ports, and
+  flags, which explains why `channel` output is useful when mapping runtime
+  objects back to processes.
+
+The Apple Internals glossary gives a shorter operational description: Skywalk
+connects networking technologies and virtual paths such as Bluetooth, Wi-Fi,
+Thunderbolt, interfaces, and tunnels. It also records the relevant vocabulary:
+nexus objects represent conduits, agent objects represent endpoints or policy
+participants, DriverKit network drivers are associated with this layer, and
+`skywalkctl` is the command-line inspection tool.
+
+The Korean macOS interface write-up is useful for field work because it starts
+from the names users actually see in `ifconfig`. It calls out `llw0` as a
+low-latency WLAN interface tied to Skywalk, `awdl0` as the Apple Wireless Direct
+Link interface used by features such as AirDrop and Continuity, and `utun#` as a
+user tunneling interface commonly used by VPN clients. Those names are normal
+macOS networking artifacts and should be correlated with `skywalkctl` output
+before drawing security conclusions.
+
 ## Start here: a ten-minute read-only survey
 
 Run these commands in order:
@@ -1207,6 +1246,9 @@ the copyright and license notice are retained.
 - [Expanded `skywalkctl(8)` man page](skywalkctl.8)
 - [Apple XNU source](https://github.com/apple-oss-distributions/xnu)
 - [Skywalk nexus/channel syscall definitions](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/kern/syscalls.master)
+- [Jonathan Levin's Darwin networking notes](https://newosxbook.com/bonus/vol1ch16.html)
+- [Apple Internals glossary](https://mroi.github.io/apple-internals/)
+- [Korean macOS networking notes](https://contrabass.tistory.com/127)
 - [IANA protocol-number registry](https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml)
 
 Preview the included man page without installing it:

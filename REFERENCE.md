@@ -28,6 +28,45 @@ Do not put those operations into an inventory script. The collector in this repo
 
 Apple's open-source XNU tree exposes the Skywalk nexus and channel system-call surface in [`bsd/kern/syscalls.master`](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/kern/syscalls.master). The complete [Apple XNU source tree](https://github.com/apple-oss-distributions/xnu) is useful background, but the user-space `skywalkctl` implementation and all current kernel internals are not fully documented as a stable public API.
 
+External research fills in some useful vocabulary. Jonathan Levin's Darwin
+networking notes discuss Skywalk's provider, nexus, channel, entitlement, and
+sysctl-backed inspection paths. The Apple Internals glossary gives a compact
+cross-reference for Skywalk, DriverKit network drivers, nexus/agent terminology,
+and `skywalkctl`. A Korean macOS network interface write-up is also useful when
+correlating unfamiliar interface names with the lower-level Skywalk objects shown
+by this tool.
+
+Source-derived working notes:
+
+- Skywalk is described by independent research as undocumented XNU networking
+  plumbing with limited public-source visibility. Treat every structure name and
+  behavior here as observed implementation detail unless Apple documents it.
+- Known provider classes include user pipes, kernel pipes, network interfaces,
+  and flow switches. Flow-switch examples are relevant to `utun` and IPSec-style
+  paths.
+- A nexus is identified by UUID and can expose channels used for packet flow.
+  Channels commonly surface transmit and receive ring concepts in diagnostic
+  output.
+- Levin's notes identify private sysctl data for provider and channel lists.
+  `skywalkctl tree`, `provider`, and `channel` are useful because the signed
+  Apple tool can translate those kernel records into readable output.
+- Broad Skywalk observation and registration paths are entitlement-gated. This
+  explains why reproducing `skywalkctl` behavior in an unsigned third-party tool
+  is not equivalent to calling a public API.
+- `proc_pidfdinfo` has an undocumented channel-info flavor referenced by Levin's
+  notes. That helps explain why channel records can be mapped to descriptors,
+  UUIDs, ports, and flags.
+- Apple Internals summarizes Skywalk as connecting technologies and virtual
+  networking paths such as Bluetooth, Wi-Fi, Thunderbolt, interfaces, and
+  tunnels. It also links the terminology to nexus and agent objects.
+- The Korean interface guide identifies `llw0` as a low-latency WLAN interface
+  used by Skywalk, `awdl0` as Apple Wireless Direct Link for Apple continuity
+  features, and `utun#` as a user-tunneling interface commonly associated with
+  VPN software.
+- Interface names visible through `ifconfig -l` and `ifconfig -v` are good
+  starting points for correlating user-visible network devices with Skywalk
+  `net-if`, `flow-switch`, and `agent` output.
+
 ## Discover the installed command set
 
 Start with the local manual and the binary's own help:
@@ -737,5 +776,8 @@ Always remove material that can directly grant access: passwords, password hashe
 - Local primary documentation: `man 8 skywalkctl` on the tested Mac.
 - Installed binary help: `/usr/sbin/skywalkctl COMMAND -h` and command-specific usage paths.
 - Apple open source: [XNU](https://github.com/apple-oss-distributions/xnu) and its [Skywalk-gated nexus/channel syscalls](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/kern/syscalls.master).
+- Jonathan Levin's Darwin networking notes: [Net-Work: Darwin Networking](https://newosxbook.com/bonus/vol1ch16.html).
+- Apple Internals glossary: [Skywalk entry](https://mroi.github.io/apple-internals/).
+- Korean macOS networking notes: [contrabass.tistory.com/127](https://contrabass.tistory.com/127).
 
 This is an observational diagnostic guide, not an Apple API contract. `skywalkctl` is a debugging tool, its output is ephemeral, and several surfaces are undocumented or build-dependent.
